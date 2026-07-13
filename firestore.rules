@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTeam(team) {
+      return team.name is string && team.name.size() <= 100
+        && team.shortName is string && team.shortName.size() <= 10
+        && team.primaryColor is string && team.primaryColor.size() <= 20
+        && team.secondaryColor is string && team.secondaryColor.size() <= 20
+        && team.badgeStyle is string && team.badgeStyle.size() <= 30;
+    }
+
+    function isValidMatchStats(stats) {
+      return stats.possession is number && stats.possession >= 0 && stats.possession <= 100
+        && stats.shotsHome is number && stats.shotsHome >= 0
+        && stats.shotsAway is number && stats.shotsAway >= 0
+        && stats.shotsOnTargetHome is number && stats.shotsOnTargetHome >= 0
+        && stats.shotsOnTargetAway is number && stats.shotsOnTargetAway >= 0
+        && stats.foulsHome is number && stats.foulsHome >= 0
+        && stats.foulsAway is number && stats.foulsAway >= 0
+        && stats.cornersHome is number && stats.cornersHome >= 0
+        && stats.cornersAway is number && stats.cornersAway >= 0
+        && stats.yellowCardsHome is number && stats.yellowCardsHome >= 0
+        && stats.yellowCardsAway is number && stats.yellowCardsAway >= 0
+        && stats.redCardsHome is number && stats.redCardsHome >= 0
+        && stats.redCardsAway is number && stats.redCardsAway >= 0;
+    }
+
+    function isValidMatch(data) {
+      return data.id is string && data.id.size() <= 128
+        && isValidTeam(data.homeTeam)
+        && isValidTeam(data.awayTeam)
+        && data.homeScore is number && data.homeScore >= 0
+        && data.awayScore is number && data.awayScore >= 0
+        && data.minute is number && data.minute >= 0 && data.minute <= 150
+        && data.status is string && (data.status == 'live' || data.status == 'upcoming' || data.status == 'finished')
+        && data.competition is string && data.competition.size() <= 200
+        && isValidMatchStats(data.stats);
+    }
+
+    match /live_matches/{matchId} {
+      allow read: if true; // Public access for viewing live scores
+      
+      allow create: if isValidId(matchId) && isValidMatch(incoming());
+      
+      allow update: if isValidId(matchId) && isValidMatch(incoming());
+      
+      allow delete: if true; // Allow clear operations and cleanup
+    }
+  }
+}

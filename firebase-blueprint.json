@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "Team": {
+      "title": "Team",
+      "description": "Represents a football team",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "shortName": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "secondaryColor": { "type": "string" },
+        "badgeStyle": { "type": "string" }
+      },
+      "required": ["name", "shortName", "primaryColor", "secondaryColor", "badgeStyle"]
+    },
+    "MatchStats": {
+      "title": "MatchStats",
+      "description": "Detailed match statistics",
+      "type": "object",
+      "properties": {
+        "possession": { "type": "number" },
+        "shotsHome": { "type": "number" },
+        "shotsAway": { "type": "number" },
+        "shotsOnTargetHome": { "type": "number" },
+        "shotsOnTargetAway": { "type": "number" },
+        "foulsHome": { "type": "number" },
+        "foulsAway": { "type": "number" },
+        "cornersHome": { "type": "number" },
+        "cornersAway": { "type": "number" },
+        "yellowCardsHome": { "type": "number" },
+        "yellowCardsAway": { "type": "number" },
+        "redCardsHome": { "type": "number" },
+        "redCardsAway": { "type": "number" }
+      },
+      "required": [
+        "possession", "shotsHome", "shotsAway", "shotsOnTargetHome", "shotsOnTargetAway",
+        "foulsHome", "foulsAway", "cornersHome", "cornersAway", "yellowCardsHome", "yellowCardsAway",
+        "redCardsHome", "redCardsAway"
+      ]
+    },
+    "MatchEvent": {
+      "title": "MatchEvent",
+      "description": "An event in a match timeline",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "minute": { "type": "number" },
+        "type": { "type": "string" },
+        "team": { "type": "string" },
+        "player": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "minute", "type", "team", "player", "description"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "A live or upcoming football match",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "homeTeam": { "$ref": "#/definitions/Team" },
+        "awayTeam": { "$ref": "#/definitions/Team" },
+        "homeScore": { "type": "number" },
+        "awayScore": { "type": "number" },
+        "minute": { "type": "number" },
+        "status": { "type": "string", "enum": ["live", "upcoming", "finished"] },
+        "competition": { "type": "string" },
+        "matchDate": { "type": "string" },
+        "matchTime": { "type": "string" },
+        "stats": { "$ref": "#/definitions/MatchStats" },
+        "timeline": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/MatchEvent" }
+        },
+        "homeLineup": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "awayLineup": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": [
+        "id", "homeTeam", "awayTeam", "homeScore", "awayScore", "minute", "status", "competition"
+      ]
+    }
+  },
+  "firestore": {
+    "live_matches/{matchId}": {
+      "schema": "Match",
+      "description": "Real-time updates of football matches"
+    }
+  }
+}
