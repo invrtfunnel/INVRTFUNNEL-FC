@@ -108,7 +108,7 @@ const OFFICIAL_WORLD_CUP_SEMI_FINALS = [
       id: 10101,
       referee: "Sandro Schärer (Switzerland)",
       timezone: "UTC",
-      date: "2026-07-14T23:00:00+00:00",
+      date: "2026-07-14T19:00:00Z",
       timestamp: 1784070000,
       periods: { first: null, second: null },
       venue: { id: null, name: "AT&T Stadium", city: "Arlington, Texas" },
@@ -140,7 +140,7 @@ const OFFICIAL_WORLD_CUP_SEMI_FINALS = [
       id: 10102,
       referee: "Wilmar Roldán (Colombia)",
       timezone: "UTC",
-      date: "2026-07-15T23:00:00+00:00",
+      date: "2026-07-15T19:00:00Z",
       timestamp: 1784156400,
       periods: { first: null, second: null },
       venue: { id: null, name: "Mercedes-Benz Stadium", city: "Atlanta, Georgia" },
@@ -277,8 +277,16 @@ async function syncLiveMatches() {
       }
 
       const possessionHome = 50;
-      const matchDateStr = new Date(item.fixture.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-      const matchTimeStr = new Date(item.fixture.date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      let fixtureDate = item.fixture.date;
+      if (fixtureDate.includes('2026-07-14')) {
+        fixtureDate = '2026-07-14T19:00:00Z';
+      } else if (fixtureDate.includes('2026-07-15')) {
+        fixtureDate = '2026-07-15T19:00:00Z';
+      }
+
+      const matchDateStr = new Date(fixtureDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      const matchTimeStr = new Date(fixtureDate).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
 
       const homeScore = item.goals.home ?? 0;
       const awayScore = item.goals.away ?? 0;
@@ -329,6 +337,9 @@ async function syncLiveMatches() {
         competition: `FIFA World Cup • ${item.league.round || 'Semi-Final'}`,
         matchDate: matchDateStr,
         matchTime: matchTimeStr,
+        fixture: {
+          date: fixtureDate
+        },
         stats: {
           possession: possessionHome,
           shotsHome: homeScore,

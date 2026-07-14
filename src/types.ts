@@ -42,6 +42,9 @@ export interface Match {
   competition: string;
   matchDate?: string;
   matchTime?: string;
+  fixture?: {
+    date: string;
+  };
   stats: MatchStats;
   timeline: MatchEvent[];
   homeLineup: string[];

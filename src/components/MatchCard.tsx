@@ -4,6 +4,26 @@ import { Match } from '../types';
 import TeamBadge from './TeamBadge';
 import { Activity, Trophy, BarChart3 } from 'lucide-react';
 
+// Helper to safely format match time across all browsers and environments in the user's local timezone
+const formatTimeSafely = (dateStr?: string, fallback?: string): string => {
+  if (!dateStr) return fallback || 'TBD';
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      return fallback || 'TBD';
+    }
+    // Using 'en-US' locale guarantees '05:30 AM/PM' layout, while automatically converting to user's local timezone
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (error) {
+    console.error('Error formatting match time:', error);
+    return fallback || 'TBD';
+  }
+};
+
 interface MatchCardProps {
   key?: React.Key;
   match: Match;
@@ -89,7 +109,9 @@ export default function MatchCard({ match, isSelected, onSelect, onOpenAnalysis 
             <>
               <span className="font-mono text-slate-400 font-extrabold uppercase tracking-widest text-[10px]">UPCOMING</span>
               <span className="text-white/20">|</span>
-              <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-slate-300 font-bold">{match.matchTime || 'TBD'}</span>
+              <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-slate-300 font-bold">
+                {formatTimeSafely(match.fixture?.date, match.matchTime)}
+              </span>
             </>
           )}
         </div>

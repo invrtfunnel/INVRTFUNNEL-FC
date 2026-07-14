@@ -4,6 +4,44 @@ import { Match } from '../types';
 import TeamBadge from './TeamBadge';
 import { Bell, BellRing, Calendar, Search, SlidersHorizontal, Check } from 'lucide-react';
 
+// Helpers to safely format match date & time in user's local timezone
+const formatTimeSafely = (dateStr?: string, fallback?: string): string => {
+  if (!dateStr) return fallback || 'TBD';
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      return fallback || 'TBD';
+    }
+    // Using 'en-US' locale guarantees '05:30 AM/PM' format while converting to local timezone
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (error) {
+    console.error('Error formatting fixture time:', error);
+    return fallback || 'TBD';
+  }
+};
+
+const formatDateSafely = (dateStr?: string, fallback?: string): string => {
+  if (!dateStr) return fallback || '';
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      return fallback || '';
+    }
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  } catch (error) {
+    console.error('Error formatting fixture date:', error);
+    return fallback || '';
+  }
+};
+
 interface UpcomingFixturesProps {
   fixtures: Match[];
 }
@@ -120,8 +158,12 @@ export default function UpcomingFixtures({ fixtures }: UpcomingFixturesProps) {
                     {fixture.competition}
                   </span>
                   <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-200">{fixture.matchTime}</span>
-                    <span className="text-[10px] text-slate-400">{fixture.matchDate}</span>
+                    <span className="text-xs font-bold text-slate-200">
+                      {formatTimeSafely(fixture.fixture?.date, fixture.matchTime)}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {formatDateSafely(fixture.fixture?.date, fixture.matchDate)}
+                    </span>
                   </div>
                 </div>
 
