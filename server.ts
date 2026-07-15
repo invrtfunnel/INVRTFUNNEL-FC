@@ -201,13 +201,11 @@ async function syncLiveMatches() {
       const url = `${baseUrl}/fixtures?league=1&season=2026`;
       console.log(`Fetching World Cup 2026 fixtures from API-Football (${isRapidApi ? 'RapidAPI' : 'API-Sports'}): ${url}`);
       
-      const headers: Record<string, string> = {};
-      if (isRapidApi) {
-        headers['x-rapidapi-key'] = apiKey;
-        headers['x-rapidapi-host'] = 'api-football-v1.p.rapidapi.com';
-      } else {
-        headers['x-apisports-key'] = apiKey;
-      }
+const headers: Record<string, string> = {
+    'x-apisports-key': apiKey,
+    'x-rapidapi-key': apiKey
+};
+
 
       const response = await fetch(url, {
         method: 'GET',
