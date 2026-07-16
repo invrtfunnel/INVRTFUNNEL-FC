@@ -85,7 +85,7 @@ export default function App() {
   const handleForceSync = async () => {
     if (syncStatus === 'syncing') return;
     setSyncStatus('syncing');
-onst handleForceSync = async () => {
+const handleForceSync = async () => {
     try {
       setSyncStatus('syncing');
       
