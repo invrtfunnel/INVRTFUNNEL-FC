@@ -5,40 +5,83 @@ import TeamBadge from './TeamBadge';
 import { Bell, BellRing, Calendar, Search, SlidersHorizontal, Check } from 'lucide-react';
 
 // Helpers to safely format match date & time in user's local timezone
-const formatTimeSafely = (dateStr?: string, fallback?: string): string => {
-  if (!dateStr) return fallback || 'TBD';
+const formatTimeSafely = (fixture: Match): string => {
+  if (!fixture) return 'TBD';
+  let dateStr = fixture.date || fixture.fixture?.date;
+  
+  if (!dateStr && fixture.matchDate && fixture.matchTime) {
+    const lowerDate = fixture.matchDate.toLowerCase();
+    let ymd = '2026-07-14';
+    if (lowerDate.includes('15')) {
+      ymd = '2026-07-15';
+    } else if (lowerDate.includes('14')) {
+      ymd = '2026-07-14';
+    }
+    
+    const timeParts = fixture.matchTime.trim().split(':');
+    if (timeParts.length >= 2) {
+      const hh = timeParts[0].padStart(2, '0');
+      const mm = timeParts[1].padStart(2, '0');
+      dateStr = `${ymd}T${hh}:${mm}:00Z`;
+    }
+  }
+
+  if (!dateStr) return fixture.matchTime || 'TBD';
+
   try {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) {
-      return fallback || 'TBD';
+      return fixture.matchTime || 'TBD';
     }
-    // Using 'en-US' locale guarantees '05:30 AM/PM' format while converting to local timezone
-    return date.toLocaleTimeString('en-US', {
+    const locale = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
+    return date.toLocaleTimeString(locale, {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true
     });
   } catch (error) {
     console.error('Error formatting fixture time:', error);
-    return fallback || 'TBD';
+    return fixture.matchTime || 'TBD';
   }
 };
 
-const formatDateSafely = (dateStr?: string, fallback?: string): string => {
-  if (!dateStr) return fallback || '';
+const formatDateSafely = (fixture: Match): string => {
+  if (!fixture) return '';
+  let dateStr = fixture.date || fixture.fixture?.date;
+  
+  if (!dateStr && fixture.matchDate && fixture.matchTime) {
+    const lowerDate = fixture.matchDate.toLowerCase();
+    let ymd = '2026-07-14';
+    if (lowerDate.includes('15')) {
+      ymd = '2026-07-15';
+    } else if (lowerDate.includes('14')) {
+      ymd = '2026-07-14';
+    }
+    
+    const timeParts = fixture.matchTime.trim().split(':');
+    if (timeParts.length >= 2) {
+      const hh = timeParts[0].padStart(2, '0');
+      const mm = timeParts[1].padStart(2, '0');
+      dateStr = `${ymd}T${hh}:${mm}:00Z`;
+    }
+  }
+
+  if (!dateStr) return fixture.matchDate || '';
+
   try {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) {
-      return fallback || '';
+      return fixture.matchDate || '';
     }
-    return date.toLocaleDateString('en-US', {
+    const locale = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
+    return date.toLocaleDateString(locale, {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
     });
   } catch (error) {
     console.error('Error formatting fixture date:', error);
-    return fallback || '';
+    return fixture.matchDate || '';
   }
 };
 
@@ -53,7 +96,7 @@ export default function UpcomingFixtures({ fixtures }: UpcomingFixturesProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Extract unique competitions for filtering
-  const leagues = ['All', ...Array.from(new Set(fixtures.map(f => f.competition)))];
+  const leagues = ['All', ...Array.from(new Set(fixtures.map(f => f && f.competition).filter(Boolean)))];
 
   const handleToggleReminder = (matchId: string, matchSummary: string) => {
     const isSet = !reminders[matchId];
@@ -67,10 +110,11 @@ export default function UpcomingFixtures({ fixtures }: UpcomingFixturesProps) {
   };
 
   const filteredFixtures = fixtures.filter(fixture => {
+    if (!fixture || !fixture.homeTeam || !fixture.awayTeam) return false;
     const matchesSearch =
-      fixture.homeTeam.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      fixture.awayTeam.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      fixture.competition.toLowerCase().includes(searchTerm.toLowerCase());
+      (fixture.homeTeam.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (fixture.awayTeam.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (fixture.competition || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesLeague = selectedLeague === 'All' || fixture.competition === selectedLeague;
     return matchesSearch && matchesLeague;
   });
@@ -82,6 +126,7 @@ export default function UpcomingFixtures({ fixtures }: UpcomingFixturesProps) {
       <AnimatePresence>
         {toastMessage && (
           <motion.div
+            key="upcoming-fixtures-toast-alert"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -159,10 +204,10 @@ export default function UpcomingFixtures({ fixtures }: UpcomingFixturesProps) {
                   </span>
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-slate-200">
-                      {formatTimeSafely(fixture.fixture?.date, fixture.matchTime)}
+                      {formatTimeSafely(fixture)}
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      {formatDateSafely(fixture.fixture?.date, fixture.matchDate)}
+                      {formatDateSafely(fixture)}
                     </span>
                   </div>
                 </div>

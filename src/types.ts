@@ -42,6 +42,7 @@ export interface Match {
   competition: string;
   matchDate?: string;
   matchTime?: string;
+  date?: string;
   fixture?: {
     date: string;
   };

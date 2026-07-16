@@ -11,9 +11,59 @@ interface MatchAnalysisModalProps {
 }
 
 export default function MatchAnalysisModal({ isOpen, onClose, match }: MatchAnalysisModalProps) {
+  const [lineupData, setLineupData] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    if (!match || !isOpen) {
+      if (!isOpen) setLineupData(null);
+      return;
+    }
+    const clientApiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
+    const headers: Record<string, string> = {
+      'x-apisports-key': clientApiKey,
+      'x-rapidapi-key': clientApiKey
+    };
+
+    fetch(`/api/matches/${match.id}/lineups`, { headers })
+      .then(res => {
+        console.log(`[CLIENT ANALYSIS FETCH] EXACT HTTP STATUS CODE: ${res.status}`);
+        if (!res.ok) throw new Error('Failed to load dynamic match data');
+        return res.json();
+      })
+      .then(data => {
+        setLineupData(data);
+      })
+      .catch(err => {
+        console.error('Error fetching dynamic match details for analysis:', err);
+      });
+  }, [match?.id, isOpen]);
+
   if (!match) return null;
 
-  const { homeTeam, awayTeam, stats, timeline, homeScore, awayScore, minute, competition } = match;
+  // Merge API stats and timeline if available
+  const stats = (lineupData && lineupData.stats && !lineupData.isFallback) 
+    ? lineupData.stats 
+    : (match.stats || {
+        possession: 50,
+        shotsHome: 0,
+        shotsAway: 0,
+        shotsOnTargetHome: 0,
+        shotsOnTargetAway: 0,
+        foulsHome: 0,
+        foulsAway: 0,
+        cornersHome: 0,
+        cornersAway: 0,
+        yellowCardsHome: 0,
+        yellowCardsAway: 0,
+        redCardsHome: 0,
+        redCardsAway: 0
+      });
+
+  const timeline = (lineupData && lineupData.events && !lineupData.isFallback && lineupData.events.length > 0)
+    ? lineupData.events
+    : (match.timeline || []);
+
+  const { homeTeam, awayTeam, homeScore, awayScore, minute, competition } = match;
 
   // Prepare shots data
   const homeShotsOnTarget = stats.shotsOnTargetHome;
@@ -71,7 +121,10 @@ export default function MatchAnalysisModal({ isOpen, onClose, match }: MatchAnal
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <motion.div
+          key="analysis-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
           
           {/* Backdrop Blur Overlay */}
           <motion.div
@@ -352,7 +405,7 @@ export default function MatchAnalysisModal({ isOpen, onClose, match }: MatchAnal
             </div>
 
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

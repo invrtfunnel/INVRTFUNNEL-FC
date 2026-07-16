@@ -41,15 +41,43 @@ export default function App() {
   const [analyzingMatchId, setAnalyzingMatchId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedLeague, setSelectedLeague] = useState<string>('All');
-  const [config, setConfig] = useState<{ isApiFootballKeyConfigured: boolean; firebaseProjectId: string } | null>(null);
+  const [config, setConfig] = useState<{ isApiFootballKeyConfigured: boolean; firebaseProjectId: string; error: string | null } | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error' | 'syncing'>('idle');
   const [syncMessage, setSyncMessage] = useState<string>('');
+  const [currentTime, setCurrentTime] = useState<string>(() => 
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  );
+
+  // Update live clock every second using local time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Fetch backend API configuration status
   useEffect(() => {
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(data => setConfig(data))
+    const clientApiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
+    const headers: Record<string, string> = {
+      'x-apisports-key': clientApiKey,
+      'x-rapidapi-key': clientApiKey
+    };
+
+    fetch('/api/config', { headers })
+      .then(res => {
+        console.log(`[CLIENT CONFIG HANDSHAKE] EXACT HTTP STATUS CODE: ${res.status}`);
+        return res.json().then(data => ({ status: res.status, data }));
+      })
+      .then(({ data }) => {
+        setConfig(data);
+        if (data.error && !data.error.includes('simulation') && !data.error.includes('Using high-fidelity')) {
+          setApiError(data.error);
+        } else {
+          setApiError(null);
+        }
+      })
       .catch(err => console.error('Error fetching API configuration status:', err));
   }, []);
 
@@ -58,10 +86,21 @@ export default function App() {
     if (syncStatus === 'syncing') return;
     setSyncStatus('syncing');
     try {
-      const response = await fetch('/api/sync-matches', { method: 'POST' });
+      const clientApiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
+      const headers: Record<string, string> = {
+        'x-apisports-key': clientApiKey,
+        'x-rapidapi-key': clientApiKey
+      };
+
+      const response = await fetch('/api/sync-matches', { 
+        method: 'POST',
+        headers
+      });
+      console.log(`[CLIENT SYNC HANDSHAKE] EXACT HTTP STATUS CODE: ${response.status}`);
       const result = await response.json();
       if (result.status === 'success') {
         setSyncStatus('success');
+        setApiError(null);
         if (result.count === 0) {
           setSyncMessage('No matches scheduled for July 14 or July 15, 2026.');
         } else {
@@ -70,11 +109,13 @@ export default function App() {
       } else {
         setSyncStatus('error');
         setSyncMessage(`Sync failed: ${result.message || 'Server error'}`);
+        setApiError('API Error: Unable to fetch live results.');
       }
     } catch (e) {
       console.error('Error during manually triggered match sync:', e);
       setSyncStatus('error');
       setSyncMessage('Failed to connect to backend service.');
+      setApiError('API Error: Unable to fetch live results.');
     } finally {
       setTimeout(() => {
         setSyncStatus('idle');
@@ -92,7 +133,11 @@ export default function App() {
       });
       
       // Sort matches so they appear in a consistent order
-      matches.sort((a, b) => a.id.localeCompare(b.id));
+      matches.sort((a, b) => {
+        const idA = a?.id || '';
+        const idB = b?.id || '';
+        return idA.localeCompare(idB);
+      });
       setLiveMatches(matches);
       
       // Select first match if none selected or if selected is missing
@@ -109,13 +154,25 @@ export default function App() {
     return () => unsubscribe();
   }, [config]);
 
-  const selectedMatch = liveMatches.find(m => m.id === selectedMatchId) || liveMatches[0];
+  const selectedMatch = liveMatches.find(m => m && m.id === selectedMatchId) || liveMatches.filter(m => m && m.homeTeam && m.awayTeam)[0];
 
-  const filteredMatches = liveMatches.filter(match => {
-    const matchesSearch = match.homeTeam.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          match.awayTeam.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          match.homeTeam.shortName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          match.awayTeam.shortName.toLowerCase().includes(searchTerm.toLowerCase());
+  const recentResults = liveMatches
+    .filter(m => m && m.homeTeam && m.awayTeam && m.status === 'finished')
+    .sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    })
+    .slice(0, 3);
+
+  const activeMatches = liveMatches.filter(m => m && m.homeTeam && m.awayTeam && (m.status === 'live' || m.status === 'upcoming'));
+
+  const filteredMatches = activeMatches.filter(match => {
+    if (!match || !match.homeTeam || !match.awayTeam) return false;
+    const matchesSearch = (match.homeTeam.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (match.awayTeam.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (match.homeTeam.shortName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (match.awayTeam.shortName || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     if (selectedLeague === 'All') {
       return matchesSearch;
@@ -153,7 +210,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
-                VELOCITY<span className="text-emerald-400">SCORES</span>
+                INVRTFUNNEL<span className="text-emerald-400">FC</span>
               </h1>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.25em]">Global Live Arena Feed</p>
             </div>
@@ -174,7 +231,7 @@ export default function App() {
               <span>FIFA World Cup 2026 Live</span>
             </span>
             <span className="text-white/20">|</span>
-            <span className="font-mono text-slate-300">UTC {new Date().toISOString().substring(11, 16)}</span>
+            <span className="font-mono text-slate-300">IST {currentTime}</span>
           </div>
 
           {/* Status info & Live Sync */}
@@ -220,6 +277,7 @@ export default function App() {
         <AnimatePresence>
           {syncMessage && (
             <motion.div
+              key="sync-message-banner"
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -326,7 +384,7 @@ export default function App() {
             </div>
 
             {/* No Live Matches Banner */}
-            {(liveMatches.length === 0 || liveMatches.every(m => m.status !== 'live')) && (
+            {(activeMatches.length === 0 || activeMatches.every(m => m.status !== 'live')) && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -345,7 +403,22 @@ export default function App() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-              {liveMatches.length === 0 ? (
+              {apiError ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-red-500/10 border border-red-500/20 rounded-3xl p-10 text-center space-y-3 w-full"
+                  id="api-error-state"
+                >
+                  <div className="h-12 w-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto text-red-400">
+                    <X className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-200">API Error: Unable to fetch live results.</h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    The live match data stream could not be loaded. Please ensure your API credentials are correct.
+                  </p>
+                </motion.div>
+              ) : liveMatches.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -418,15 +491,39 @@ export default function App() {
 
         {/* Upcoming Fixtures */}
         <section className="pt-2">
-          <UpcomingFixtures fixtures={liveMatches.filter(m => m.status === 'upcoming')} />
+          <UpcomingFixtures fixtures={liveMatches.filter(m => m && m.status === 'upcoming')} />
         </section>
+
+        {/* Latest Results Section */}
+        {recentResults.length > 0 && (
+          <section className="pt-4 space-y-5" id="latest-results-section">
+            <div className="flex items-center gap-2.5">
+              <Trophy className="h-5 w-5 text-amber-400 stroke-[2.5]" />
+              <div>
+                <h2 className="text-lg font-bold text-slate-100">Latest Results</h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Most recent completed World Cup matches</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {recentResults.map(match => (
+                <MatchCard
+                  key={match.id}
+                  match={match}
+                  isSelected={selectedMatchId === match.id}
+                  onSelect={() => setSelectedMatchId(match.id)}
+                  onOpenAnalysis={() => setAnalyzingMatchId(match.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
       </main>
 
       {/* Styled Footer */}
       <footer className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-16 border-t border-slate-900/60 pt-8 text-center text-xs text-slate-500">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© 2026 Velocity Scores Arena. All rights reserved.</p>
+          <p>© 2026 INVRTFUNNEL FC. All rights reserved.</p>
           <div className="flex items-center gap-4 text-slate-400">
             <span className="hover:text-emerald-400 transition cursor-pointer">Terms</span>
             <span>•</span>

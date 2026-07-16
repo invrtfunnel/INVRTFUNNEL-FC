@@ -1,5 +1,5 @@
 {
-  "name": "Live Football Scores Dashboard",
+  "name": "INVRTFUNNEL FC",
   "description": "A responsive, modern, and real-time dashboard for live football scores, displaying active matches, live match statistics, and upcoming fixtures.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

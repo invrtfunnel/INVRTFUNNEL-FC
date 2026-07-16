@@ -4,23 +4,49 @@ import { Match } from '../types';
 import TeamBadge from './TeamBadge';
 import { Activity, Trophy, BarChart3 } from 'lucide-react';
 
-// Helper to safely format match time across all browsers and environments in the user's local timezone
-const formatTimeSafely = (dateStr?: string, fallback?: string): string => {
-  if (!dateStr) return fallback || 'TBD';
+// Helper to safely format match date & time across all browsers and environments in the user's local timezone
+const formatTimeSafely = (match: Match): string => {
+  if (!match) return 'TBD';
+  let dateStr = match.date || match.fixture?.date;
+  
+  if (!dateStr && match.matchDate && match.matchTime) {
+    const lowerDate = match.matchDate.toLowerCase();
+    let ymd = '2026-07-14';
+    if (lowerDate.includes('15')) {
+      ymd = '2026-07-15';
+    } else if (lowerDate.includes('14')) {
+      ymd = '2026-07-14';
+    }
+    
+    const timeParts = match.matchTime.trim().split(':');
+    if (timeParts.length >= 2) {
+      const hh = timeParts[0].padStart(2, '0');
+      const mm = timeParts[1].padStart(2, '0');
+      dateStr = `${ymd}T${hh}:${mm}:00Z`;
+    }
+  }
+
+  if (!dateStr) return match.matchTime || 'TBD';
+
   try {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) {
-      return fallback || 'TBD';
+      return match.matchTime || 'TBD';
     }
-    // Using 'en-US' locale guarantees '05:30 AM/PM' layout, while automatically converting to user's local timezone
-    return date.toLocaleTimeString('en-US', {
+    const locale = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
+    const formattedDate = date.toLocaleDateString(locale, {
+      month: 'short',
+      day: 'numeric'
+    });
+    const formattedTime = date.toLocaleTimeString(locale, {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true
     });
+    return `${formattedDate}, ${formattedTime}`;
   } catch (error) {
     console.error('Error formatting match time:', error);
-    return fallback || 'TBD';
+    return match.matchTime || 'TBD';
   }
 };
 
@@ -33,7 +59,10 @@ interface MatchCardProps {
 }
 
 export default function MatchCard({ match, isSelected, onSelect, onOpenAnalysis }: MatchCardProps) {
-  const { homeTeam, awayTeam, homeScore, awayScore, minute, competition } = match;
+  if (!match) return null;
+  const { homeTeam, awayTeam, homeScore = 0, awayScore = 0, minute = 0, competition = '' } = match;
+  if (!homeTeam || !awayTeam) return null;
+
   const [prevHomeScore, setPrevHomeScore] = useState(homeScore);
   const [prevAwayScore, setPrevAwayScore] = useState(awayScore);
   const [goalFlasher, setGoalFlasher] = useState<'home' | 'away' | null>(null);
@@ -75,6 +104,7 @@ export default function MatchCard({ match, isSelected, onSelect, onOpenAnalysis 
       <AnimatePresence>
         {goalFlasher && (
           <motion.div
+            key="goal-flash-flare"
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.15 }}
             exit={{ opacity: 0 }}
@@ -110,7 +140,7 @@ export default function MatchCard({ match, isSelected, onSelect, onOpenAnalysis 
               <span className="font-mono text-slate-400 font-extrabold uppercase tracking-widest text-[10px]">UPCOMING</span>
               <span className="text-white/20">|</span>
               <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-slate-300 font-bold">
-                {formatTimeSafely(match.fixture?.date, match.matchTime)}
+                {formatTimeSafely(match)}
               </span>
             </>
           )}
@@ -197,7 +227,7 @@ export default function MatchCard({ match, isSelected, onSelect, onOpenAnalysis 
         </div>
         {/* Quick event string */}
         <div className="text-right truncate max-w-[150px] font-medium text-slate-300">
-          {match.timeline.length > 0 ? (
+          {match.timeline && match.timeline.length > 0 ? (
             <div className="flex items-center gap-1 justify-end">
               <span className="font-mono text-[9px] bg-white/10 px-1.5 py-0.2 rounded text-slate-300">
                 {match.timeline[match.timeline.length - 1].minute}'
