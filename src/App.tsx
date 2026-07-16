@@ -85,52 +85,45 @@ export default function App() {
   const handleForceSync = async () => {
     if (syncStatus === 'syncing') return;
     setSyncStatus('syncing');
-    try {
-      const clientApiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
-      const headers: Record<string, string> = {
-        'x-apisports-key': clientApiKey,
-        'x-rapidapi-key': clientApiKey
-      };
+try {
+  setSyncStatus('syncing');
+  
+  // Grab the key directly from Vercel's environment variables
+  const apiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
+  
+  // Fetch DIRECTLY from the sports database (bypassing the missing backend)
+  const response = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026', {
+    method: 'GET',
+    headers: {
+      'x-apisports-key': apiKey,
+      'x-rapidapi-key': apiKey
+    }
+  });
 
-      setSyncStatus('syncing');
+  if (!response.ok) throw new Error('API request failed');
 
-// 1. Grab the key directly from Vercel's environment variables
-const apiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
-
-// 2. Fetch directly from the sports database (bypassing the broken proxy)
-const response = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026', {
-  method: 'GET',
-  headers: {
-    'x-apisports-key': apiKey,
-    'x-rapidapi-key': apiKey
+  const data = await response.json();
+  
+  // Extract the matches from the API's 'response' array
+  const matches = data.response || [];
+  
+  setLiveMatches(matches);
+  setSyncStatus('success');
+  setApiError(null);
+  
+  if (matches.length === 0) {
+    setSyncMessage('No matches scheduled right now.');
+  } else {
+    setSyncMessage(`Successfully synced ${matches.length} matches!`);
   }
-});
 
-const data = await response.json();
-
-// 3. Handle any API-specific errors (like an invalid key)
-if (data.errors && Object.keys(data.errors).length > 0) {
-   throw new Error(Object.values(data.errors)[0] as string);
-}
-
-// 4. Extract the matches from the API's 'response' array
-const matches = data.response || [];
-
-setLiveMatches(matches);
-setSyncStatus('success');
-setApiError(null);
-
-if (matches.length === 0) {
-  setSyncMessage('No matches scheduled right now.');
-} else {
-  setSyncMessage(`Successfully synced ${matches.length} matches strictly from API-Football.`);
-}
-    } catch (e) {
-      console.error('Error during manually triggered match sync:', e);
-      setSyncStatus('error');
-      setSyncMessage('Failed to connect to backend service.');
-      setApiError('API Error: Unable to fetch live results.');
-    } finally {
+} catch (err: any) {
+  console.error("Fetch failed:", err);
+  setSyncStatus('error');
+  setSyncMessage('Failed to connect to API directly.');
+  setApiError('API Error: Unable to fetch live results.');
+  setLiveMatches([]); 
+} finally {
       setTimeout(() => {
         setSyncStatus('idle');
         setSyncMessage('');
