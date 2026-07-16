@@ -89,10 +89,8 @@ const handleForceSync = async () => {
     try {
       setSyncStatus('syncing');
       
-      // Grab the key directly from Vercel's environment variables
       const apiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
       
-      // Fetch directly from the sports database
       const response = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026&from=2026-07-13&to=2026-07-20', {
         method: 'GET',
         headers: {
@@ -104,8 +102,6 @@ const handleForceSync = async () => {
       if (!response.ok) throw new Error('API request failed');
 
       const data = await response.json();
-      
-      // Extract the matches from the API's 'response' array
       let matches = data.response || [];
       
       // --- INJECT 2026 SIMULATION DATA IF API IS EMPTY ---
@@ -139,6 +135,21 @@ const handleForceSync = async () => {
             goals: { home: null, away: null }
           }
         ];
+      }
+      
+      setLiveMatches(matches);
+      setSyncStatus('success');
+      setApiError(null);
+      setSyncMessage(matches.length === 0 ? 'No matches scheduled right now.' : `Successfully synced ${matches.length} matches!`);
+
+    } catch (err: any) {
+      console.error("Fetch failed:", err);
+      setSyncStatus('error');
+      setSyncMessage('Failed to connect to API directly.');
+      setApiError('API Error: Unable to fetch live results.');
+      setLiveMatches([]); 
+    }
+  };
       }
       
       setLiveMatches(matches);
