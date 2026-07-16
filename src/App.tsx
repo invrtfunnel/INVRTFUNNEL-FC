@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity, Trophy, RefreshCw, Info, X, TrendingUp, Search, Filter } from 'lucide-react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from './firebase';
+import { Activity, Trophy, RefreshCw, Info, X } from 'lucide-react';
 import MatchCard from './components/MatchCard';
 import MatchDetails from './components/MatchDetails';
 import MatchAnalysisModal from './components/MatchAnalysisModal';
-import UpcomingFixtures from './components/UpcomingFixtures';
 
+// Match Type Definition
 interface Match {
   id: string;
   homeTeam: { name: string; logo: string };
@@ -24,44 +22,33 @@ export default function App() {
   const [analyzingMatchId, setAnalyzingMatchId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error' | 'syncing'>('idle');
   const [syncMessage, setSyncMessage] = useState('');
-  const [currentTime, setCurrentTime] = useState('');
 
-  // Local Time Clock
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Fetch logic with 2026 Simulation Fallback
   const handleForceSync = async () => {
     setSyncStatus('syncing');
-    setSyncMessage('Syncing data...');
+    setSyncMessage('Syncing live feed...');
     try {
       const apiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
       const response = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026', {
         headers: { 'x-apisports-key': apiKey, 'x-rapidapi-key': apiKey }
       });
-
-      if (!response.ok) throw new Error('API Request Failed');
+      
       const data = await response.json();
       let matches = data.response || [];
 
+      // Fallback for simulation
       if (matches.length === 0) {
         matches = [
-          { id: '9001', homeTeam: { name: 'France', logo: '' }, awayTeam: { name: 'Spain', logo: '' }, status: 'finished', competition: 'World Cup', date: '2026-07-14', score: '1-2' },
-          { id: '9002', homeTeam: { name: 'England', logo: '' }, awayTeam: { name: 'Argentina', logo: '' }, status: 'finished', competition: 'World Cup', date: '2026-07-15', score: '0-1' },
-          { id: '9003', homeTeam: { name: 'Argentina', logo: '' }, awayTeam: { name: 'Spain', logo: '' }, status: 'upcoming', competition: 'World Cup', date: '2026-07-19' }
+          { id: '9001', homeTeam: { name: 'France', logo: '' }, awayTeam: { name: 'Spain', logo: '' }, status: 'finished', competition: 'FIFA World Cup - Semis', date: '2026-07-14', score: '1-2' },
+          { id: '9002', homeTeam: { name: 'England', logo: '' }, awayTeam: { name: 'Argentina', logo: '' }, status: 'finished', competition: 'FIFA World Cup - Semis', date: '2026-07-15', score: '0-1' },
+          { id: '9003', homeTeam: { name: 'Argentina', logo: '' }, awayTeam: { name: 'Spain', logo: '' }, status: 'upcoming', competition: 'FIFA World Cup - Final', date: '2026-07-19' }
         ];
       }
-
       setLiveMatches(matches);
       setSyncStatus('success');
       setSyncMessage('Synced successfully.');
     } catch (err) {
       setSyncStatus('error');
-      setSyncMessage('Sync failed.');
+      setSyncMessage('Sync failed. Check API key.');
     }
   };
 
@@ -70,11 +57,12 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-100 font-sans antialiased p-8">
-      <header className="flex items-center justify-between mb-8 pb-6 border-b border-white/10">
+    <div className="min-h-screen bg-[#020617] text-slate-100 font-sans p-4 md:p-8">
+      {/* Header */}
+      <header className="flex justify-between items-center mb-8 border-b border-white/10 pb-6">
         <div>
-          <h1 className="text-xl font-black">INVRTFUNNEL<span className="text-emerald-400">FC</span></h1>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest">IST {currentTime}</p>
+          <h1 className="text-2xl font-black">INVRTFUNNEL<span className="text-emerald-400">FC</span></h1>
+          <p className="text-xs text-slate-400 uppercase tracking-widest mt-1">Live Football Scores Dashboard</p>
         </div>
         <button 
           onClick={handleForceSync}
@@ -85,28 +73,42 @@ export default function App() {
         </button>
       </header>
 
-      <div className="grid lg:grid-cols-3 gap-8">
+      {/* No Matches Notification */}
+      {liveMatches.length === 0 && (
+        <div className="bg-slate-900/50 border border-white/5 p-6 rounded-2xl mb-8 flex items-center gap-4">
+          <Info className="text-emerald-400 h-6 w-6" />
+          <div>
+            <h3 className="font-bold">No live matches at the moment.</h3>
+            <p className="text-xs text-slate-400">Displaying historical World Cup data while you wait for the final.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-4">
           {liveMatches.map(match => (
-            <div 
-              key={match.id} 
-              onClick={() => setSelectedMatchId(match.id)}
-              className="bg-slate-900 border border-white/10 p-5 rounded-2xl cursor-pointer hover:border-emerald-500/50 transition"
-            >
-              <h2 className="font-bold text-lg">{match.homeTeam.name} vs {match.awayTeam.name}</h2>
-              <p className="text-xs text-slate-400">{match.status.toUpperCase()} {match.score && `- ${match.score}`}</p>
-              <button 
-                onClick={(e) => { e.stopPropagation(); setAnalyzingMatchId(match.id); }}
-                className="mt-3 text-[10px] text-emerald-400 font-bold uppercase"
-              >
-                View Analysis
-              </button>
+            <div key={match.id} className="relative">
+              <MatchCard 
+                match={match} 
+                isSelected={selectedMatchId === match.id} 
+                onSelect={() => setSelectedMatchId(match.id)}
+                onOpenAnalysis={() => setAnalyzingMatchId(match.id)}
+              />
             </div>
           ))}
         </div>
         
+        {/* Detail Panel */}
         <div className="lg:col-span-1">
-          <MatchDetails match={liveMatches.find(m => m.id === selectedMatchId)} />
+          {selectedMatchId ? (
+            <MatchDetails match={liveMatches.find(m => m.id === selectedMatchId)} />
+          ) : (
+            <div className="bg-slate-900/30 border border-dashed border-white/10 p-8 rounded-2xl text-center text-slate-500">
+              <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Select a match to view details and analysis.</p>
+            </div>
+          )}
         </div>
       </div>
 
