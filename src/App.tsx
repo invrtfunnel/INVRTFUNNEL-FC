@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity, Trophy, RefreshCw, Info, X } from 'lucide-react';
+import { Activity, Trophy, Calendar, RefreshCw, Info, Search, Filter, X } from 'lucide-react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase';
 import MatchCard from './components/MatchCard';
 import MatchDetails from './components/MatchDetails';
 import MatchAnalysisModal from './components/MatchAnalysisModal';
+import UpcomingFixtures from './components/UpcomingFixtures';
 
-// Match Type Definition
 interface Match {
   id: string;
   homeTeam: { name: string; logo: string };
@@ -20,9 +22,12 @@ export default function App() {
   const [liveMatches, setLiveMatches] = useState<Match[]>([]);
   const [selectedMatchId, setSelectedMatchId] = useState<string>('');
   const [analyzingMatchId, setAnalyzingMatchId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [selectedLeague, setSelectedLeague] = useState<string>('All');
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error' | 'syncing'>('idle');
   const [syncMessage, setSyncMessage] = useState('');
 
+  // 1. Force Sync Logic (with Simulation Fallback)
   const handleForceSync = async () => {
     setSyncStatus('syncing');
     setSyncMessage('Syncing live feed...');
@@ -35,12 +40,11 @@ export default function App() {
       const data = await response.json();
       let matches = data.response || [];
 
-      // Fallback for simulation
       if (matches.length === 0) {
         matches = [
-          { id: '9001', homeTeam: { name: 'France', logo: '' }, awayTeam: { name: 'Spain', logo: '' }, status: 'finished', competition: 'FIFA World Cup - Semis', date: '2026-07-14', score: '1-2' },
-          { id: '9002', homeTeam: { name: 'England', logo: '' }, awayTeam: { name: 'Argentina', logo: '' }, status: 'finished', competition: 'FIFA World Cup - Semis', date: '2026-07-15', score: '0-1' },
-          { id: '9003', homeTeam: { name: 'Argentina', logo: '' }, awayTeam: { name: 'Spain', logo: '' }, status: 'upcoming', competition: 'FIFA World Cup - Final', date: '2026-07-19' }
+          { id: '9001', homeTeam: { name: 'France', logo: '' }, awayTeam: { name: 'Spain', logo: '' }, status: 'finished', competition: 'World Cup', date: '2026-07-14', score: '1-2' },
+          { id: '9002', homeTeam: { name: 'England', logo: '' }, awayTeam: { name: 'Argentina', logo: '' }, status: 'finished', competition: 'World Cup', date: '2026-07-15', score: '0-1' },
+          { id: '9003', homeTeam: { name: 'Argentina', logo: '' }, awayTeam: { name: 'Spain', logo: '' }, status: 'upcoming', competition: 'World Cup', date: '2026-07-19' }
         ];
       }
       setLiveMatches(matches);
@@ -48,21 +52,31 @@ export default function App() {
       setSyncMessage('Synced successfully.');
     } catch (err) {
       setSyncStatus('error');
-      setSyncMessage('Sync failed. Check API key.');
+      setSyncMessage('Sync failed.');
     }
   };
 
+  // 2. Firebase Listener
   useEffect(() => {
-    handleForceSync();
+    const unsubscribe = onSnapshot(collection(db, 'live_matches'), (snapshot) => {
+      const matches: Match[] = snapshot.docs.map(doc => doc.data() as Match);
+      setLiveMatches(matches);
+    });
+    return () => unsubscribe();
   }, []);
 
+  const activeMatches = liveMatches.filter(m => (m.status === 'live' || m.status === 'upcoming'));
+  const filteredMatches = activeMatches.filter(match => 
+    match.homeTeam.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    match.awayTeam.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-100 font-sans p-4 md:p-8">
-      {/* Header */}
+    <div className="min-h-screen bg-[#020617] text-slate-100 p-8 font-sans">
       <header className="flex justify-between items-center mb-8 border-b border-white/10 pb-6">
         <div>
           <h1 className="text-2xl font-black">INVRTFUNNEL<span className="text-emerald-400">FC</span></h1>
-          <p className="text-xs text-slate-400 uppercase tracking-widest mt-1">Live Football Scores Dashboard</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Global Live Arena Feed</p>
         </div>
         <button 
           onClick={handleForceSync}
@@ -73,42 +87,20 @@ export default function App() {
         </button>
       </header>
 
-      {/* No Matches Notification */}
-      {liveMatches.length === 0 && (
-        <div className="bg-slate-900/50 border border-white/5 p-6 rounded-2xl mb-8 flex items-center gap-4">
-          <Info className="text-emerald-400 h-6 w-6" />
-          <div>
-            <h3 className="font-bold">No live matches at the moment.</h3>
-            <p className="text-xs text-slate-400">Displaying historical World Cup data while you wait for the final.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-4">
-          {liveMatches.map(match => (
-            <div key={match.id} className="relative">
-              <MatchCard 
-                match={match} 
-                isSelected={selectedMatchId === match.id} 
-                onSelect={() => setSelectedMatchId(match.id)}
-                onOpenAnalysis={() => setAnalyzingMatchId(match.id)}
-              />
-            </div>
+          {filteredMatches.map(match => (
+            <MatchCard 
+              key={match.id} 
+              match={match} 
+              isSelected={selectedMatchId === match.id} 
+              onSelect={() => setSelectedMatchId(match.id)}
+              onOpenAnalysis={() => setAnalyzingMatchId(match.id)}
+            />
           ))}
         </div>
-        
-        {/* Detail Panel */}
         <div className="lg:col-span-1">
-          {selectedMatchId ? (
-            <MatchDetails match={liveMatches.find(m => m.id === selectedMatchId)} />
-          ) : (
-            <div className="bg-slate-900/30 border border-dashed border-white/10 p-8 rounded-2xl text-center text-slate-500">
-              <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Select a match to view details and analysis.</p>
-            </div>
-          )}
+          <MatchDetails match={liveMatches.find(m => m.id === selectedMatchId)} />
         </div>
       </div>
 
