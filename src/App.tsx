@@ -92,25 +92,39 @@ export default function App() {
         'x-rapidapi-key': clientApiKey
       };
 
-      const response = await fetch('/api/sync-matches', { 
-        method: 'POST',
-        headers
-      });
-      console.log(`[CLIENT SYNC HANDSHAKE] EXACT HTTP STATUS CODE: ${response.status}`);
-      const result = await response.json();
-      if (result.status === 'success') {
-        setSyncStatus('success');
-        setApiError(null);
-        if (result.count === 0) {
-          setSyncMessage('No matches scheduled for July 14 or July 15, 2026.');
-        } else {
-          setSyncMessage(`Successfully synced ${result.count} matches strictly from API-Football.`);
-        }
-      } else {
-        setSyncStatus('error');
-        setSyncMessage(`Sync failed: ${result.message || 'Server error'}`);
-        setApiError('API Error: Unable to fetch live results.');
-      }
+      setSyncStatus('syncing');
+
+// 1. Grab the key directly from Vercel's environment variables
+const apiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
+
+// 2. Fetch directly from the sports database (bypassing the broken proxy)
+const response = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026', {
+  method: 'GET',
+  headers: {
+    'x-apisports-key': apiKey,
+    'x-rapidapi-key': apiKey
+  }
+});
+
+const data = await response.json();
+
+// 3. Handle any API-specific errors (like an invalid key)
+if (data.errors && Object.keys(data.errors).length > 0) {
+   throw new Error(Object.values(data.errors)[0] as string);
+}
+
+// 4. Extract the matches from the API's 'response' array
+const matches = data.response || [];
+
+setLiveMatches(matches);
+setSyncStatus('success');
+setApiError(null);
+
+if (matches.length === 0) {
+  setSyncMessage('No matches scheduled right now.');
+} else {
+  setSyncMessage(`Successfully synced ${matches.length} matches strictly from API-Football.`);
+}
     } catch (e) {
       console.error('Error during manually triggered match sync:', e);
       setSyncStatus('error');
