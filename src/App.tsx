@@ -162,7 +162,7 @@ const handleForceSync = async () => {
         setSyncMessage(`Successfully synced ${matches.length} matches!`);
       }
 
-    } catch (err: any) {
+    } catch (err) {
       console.error("Fetch failed:", err);
       setSyncStatus('error');
       setSyncMessage('Failed to connect to API directly.');
