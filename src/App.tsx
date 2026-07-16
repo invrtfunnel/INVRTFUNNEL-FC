@@ -92,7 +92,7 @@ try {
   const apiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
   
   // Fetch DIRECTLY from the sports database (bypassing the missing backend)
-  const response = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026', {
+ const response = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026&from=2026-07-13&to=2026-07-20', {
     method: 'GET',
     headers: {
       'x-apisports-key': apiKey,
