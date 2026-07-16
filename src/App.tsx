@@ -1,71 +1,93 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Activity, RefreshCw, Info, Search, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { RefreshCw, TrendingUp, AlertCircle, Activity } from 'lucide-react';
 
-// Simplified Match types for this standalone environment
-interface Match {
-  id: string;
-  homeTeam: { name: string };
-  awayTeam: { name: string };
-  status: string;
-}
+// --- CONFIGURATION ---
+// Paste your API endpoint and API key here
+const API_ENDPOINT = 'https://your-api-domain.com/v1/scores'; 
+const API_KEY = ''; // Paste your key here
+const REFRESH_INTERVAL = 30000; // Update every 30 seconds
 
 export default function App() {
-  const [liveMatches, setLiveMatches] = useState<Match[]>([]);
-  const [selectedMatchId, setSelectedMatchId] = useState<string>('');
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error' | 'syncing'>('idle');
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  // Simulation of data sync
-  const handleForceSync = async () => {
-    setSyncStatus('syncing');
-    try {
-      // Simulation of API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setLiveMatches([
-        { id: '1', homeTeam: { name: 'France' }, awayTeam: { name: 'Spain' }, status: 'live' },
-        { id: '2', homeTeam: { name: 'England' }, awayTeam: { name: 'Argentina' }, status: 'upcoming' }
-      ]);
-      setSyncStatus('success');
-    } catch (err) {
-      setSyncStatus('error');
+  const fetchData = useCallback(async () => {
+    if (!API_KEY) {
+      setError('Please configure your API Key in the App.jsx file.');
+      return;
     }
-  };
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(API_ENDPOINT, {
+        headers: { 'Authorization': `Bearer ${API_KEY}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch data');
+      
+      const result = await response.json();
+      setData(result);
+      setLastUpdated(new Date());
+    } catch (err) {
+      setError('Unable to reach the server. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Set up auto-refresh
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-100 font-sans antialiased pb-12">
-      <header className="border-b border-white/10 bg-slate-950/40 sticky top-0 z-40">
-        <div className="mx-auto max-w-7xl px-4 h-20 flex items-center justify-between">
-          <h1 className="text-xl font-black">INVRTFUNNEL<span className="text-emerald-400">FC</span></h1>
-          <button 
-            onClick={handleForceSync} 
-            className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-xl text-xs font-bold hover:bg-white/20 transition"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} /> 
-            {syncStatus === 'syncing' ? 'Syncing...' : 'Sync Now'}
-          </button>
+    <div className="min-h-screen bg-gray-50 p-6 font-sans text-gray-900">
+      <header className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Activity className="text-blue-600" /> Live Metrics
+          </h1>
+          <p className="text-sm text-gray-500">Auto-updating every {REFRESH_INTERVAL/1000}s</p>
         </div>
+        <button 
+          onClick={fetchData} 
+          className="p-2 rounded-full hover:bg-gray-200 transition"
+          disabled={loading}
+        >
+          <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 mt-6">
-        {liveMatches.length === 0 ? (
-          <div className="text-center p-10 border border-white/5 rounded-3xl">
-            <p className="text-slate-400">Koi live matches nahi hain. Sync button dabayein.</p>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {liveMatches.map(match => (
-              <div 
-                key={match.id} 
-                className={`p-4 rounded-xl border ${selectedMatchId === match.id ? 'border-emerald-500' : 'border-white/10'} bg-slate-900/50 cursor-pointer`}
-                onClick={() => setSelectedMatchId(match.id)}
-              >
-                <h2 className="font-bold">{match.homeTeam.name} vs {match.awayTeam.name}</h2>
-                <p className="text-xs text-slate-400 capitalize">{match.status}</p>
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center gap-3 mb-6">
+          <AlertCircle size={20} /> {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {data.length > 0 ? (
+          data.map((item, idx) => (
+            <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <h3 className="text-gray-500 text-sm font-medium">{item.label}</h3>
+              <p className="text-4xl font-bold mt-2">{item.value}</p>
+              <div className="mt-4 text-green-600 text-sm flex items-center gap-1 font-semibold">
+                <TrendingUp size={16} /> +{item.trend}%
               </div>
-            ))}
-          </div>
+            </div>
+          ))
+        ) : (
+          !loading && <div className="col-span-full text-center py-12 text-gray-400">No data available yet.</div>
         )}
-      </main>
+      </div>
+
+      <footer className="mt-12 text-center text-xs text-gray-400">
+        Last updated: {lastUpdated.toLocaleTimeString()}
+      </footer>
     </div>
   );
 }
