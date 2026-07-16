@@ -82,100 +82,19 @@ export default function App() {
   }, []);
 
   // Force sync from backend REST API-Football feed
-  const handleForceSync = async () => {
-    if (syncStatus === 'syncing') return;
-    setSyncStatus('syncing');
-const handleForceSync = async () => {
-    try {
-      setSyncStatus('syncing');
-      
-      const apiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
-      
-      const response = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026&from=2026-07-13&to=2026-07-20', {
-        method: 'GET',
-        headers: {
-          'x-apisports-key': apiKey,
-          'x-rapidapi-key': apiKey
-        }
-      });
-
-      if (!response.ok) throw new Error('API request failed');
-
-      const data = await response.json();
-      let matches = data.response || [];
-      
-      // --- INJECT 2026 SIMULATION DATA IF API IS EMPTY ---
-      if (matches.length === 0) {
-        matches = [
-          {
-            fixture: { id: 9001, date: "2026-07-14T19:00:00Z", status: { short: "FT", long: "Match Finished" } },
-            league: { name: "FIFA World Cup", season: 2026 },
-            teams: {
-              home: { name: "France", logo: "https://media.api-sports.io/football/teams/17.png", winner: false },
-              away: { name: "Spain", logo: "https://media.api-sports.io/football/teams/9.png", winner: true }
-            },
-            goals: { home: 1, away: 2 }
-          },
-          {
-            fixture: { id: 9002, date: "2026-07-15T19:00:00Z", status: { short: "FT", long: "Match Finished" } },
-            league: { name: "FIFA World Cup", season: 2026 },
-            teams: {
-              home: { name: "England", logo: "https://media.api-sports.io/football/teams/10.png", winner: false },
-              away: { name: "Argentina", logo: "https://media.api-sports.io/football/teams/26.png", winner: true }
-            },
-            goals: { home: 0, away: 1 }
-          },
-          {
-            fixture: { id: 9003, date: "2026-07-19T19:00:00Z", status: { short: "NS", long: "Not Started" } },
-            league: { name: "FIFA World Cup", season: 2026 },
-            teams: {
-              home: { name: "Argentina", logo: "https://media.api-sports.io/football/teams/26.png", winner: null },
-              away: { name: "Spain", logo: "https://media.api-sports.io/football/teams/9.png", winner: null }
-            },
-            goals: { home: null, away: null }
-          }
-        ];
-      }
-      
-      setLiveMatches(matches);
-      setSyncStatus('success');
-      setApiError(null);
-      setSyncMessage(matches.length === 0 ? 'No matches scheduled right now.' : `Successfully synced ${matches.length} matches!`);
-
-    } catch (err: any) {
-      console.error("Fetch failed:", err);
-      setSyncStatus('error');
-      setSyncMessage('Failed to connect to API directly.');
-      setApiError('API Error: Unable to fetch live results.');
-      setLiveMatches([]); 
-    }
-  };
-      }
-      
-      setLiveMatches(matches);
-      setSyncStatus('success');
-      setApiError(null);
-      
-      if (matches.length === 0) {
-        setSyncMessage('No matches scheduled right now.');
-      } else {
-        setSyncMessage(`Successfully synced ${matches.length} matches!`);
-      }
-
-    } catch (err) {
-      console.error("Fetch failed:", err);
-      setSyncStatus('error');
-      setSyncMessage('Failed to connect to API directly.');
-      setApiError('API Error: Unable to fetch live results.');
-      setLiveMatches([]); 
+   const apiKey = import.meta.env.VITE_FOOTBALL_API_KEY || '';
+  
+  const response = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026&from=2026-07-13&to=2026-07-20', {
+    method: 'GET',
+    headers: {
+      'x-apisports-key': apiKey,
+      'x-rapidapi-key': apiKey
     }
   });
 
   if (!response.ok) throw new Error('API request failed');
 
   const data = await response.json();
-  
-  // Extract the matches from the API's 'response' array
   let matches = data.response || [];
   
   // --- INJECT 2026 SIMULATION DATA IF API IS EMPTY ---
@@ -214,26 +133,20 @@ const handleForceSync = async () => {
   setLiveMatches(matches);
   setSyncStatus('success');
   setApiError(null);
-  
-  if (matches.length === 0) {
-    setSyncMessage('No matches scheduled right now.');
-  } else {
-    setSyncMessage(`Successfully synced ${matches.length} matches!`);
-  }
+  setSyncMessage(matches.length === 0 ? 'No matches scheduled right now.' : `Successfully synced ${matches.length} matches!`);
 
-} catch (err: any) {
+} catch (err) {
   console.error("Fetch failed:", err);
   setSyncStatus('error');
   setSyncMessage('Failed to connect to API directly.');
   setApiError('API Error: Unable to fetch live results.');
   setLiveMatches([]); 
-} finally {
-      setTimeout(() => {
-        setSyncStatus('idle');
-        setSyncMessage('');
-      }, 5000);
-    }
-  };
+}
+
+
+};
+
+
 
   // Set up Firebase Firestore real-time listener
   useEffect(() => {
