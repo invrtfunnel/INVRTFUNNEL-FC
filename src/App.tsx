@@ -1,93 +1,40 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, TrendingUp, AlertCircle, Activity } from 'lucide-react';
-
-// --- CONFIGURATION ---
-// Paste your API endpoint and API key here
-const API_ENDPOINT = 'https://your-api-domain.com/v1/scores'; 
-const API_KEY = ''; // Paste your key here
-const REFRESH_INTERVAL = 30000; // Update every 30 seconds
-
-export default function App() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
-
-  const fetchData = useCallback(async () => {
-    if (!API_KEY) {
-      setError('Please configure your API Key in the App.jsx file.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(API_ENDPOINT, {
-        headers: { 'Authorization': `Bearer ${API_KEY}` }
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch data');
-      
-      const result = await response.json();
-      setData(result);
-      setLastUpdated(new Date());
+setLiveMatches(matches);
+      setSyncStatus('success');
+      setSyncMessage('Synced successfully.');
     } catch (err) {
-      setError('Unable to reach the server. Please check your connection.');
-    } finally {
-      setLoading(false);
+      setSyncStatus('error');
+      setSyncMessage('Sync failed. Please check your API Key.');
     }
+  };
+
+  useEffect(() => {
+    // Initial fetch
+    handleForceSync();
   }, []);
 
-  // Set up auto-refresh
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, REFRESH_INTERVAL);
-    return () => clearInterval(interval);
-  }, [fetchData]);
-
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans text-gray-900">
-      <header className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Activity className="text-blue-600" /> Live Metrics
-          </h1>
-          <p className="text-sm text-gray-500">Auto-updating every {REFRESH_INTERVAL/1000}s</p>
-        </div>
+    <div className="min-h-screen bg-[#020617] text-slate-100 font-sans antialiased p-8">
+      <header className="flex items-center justify-between mb-8">
+        <h1 className="text-xl font-black">INVRTFUNNEL<span className="text-emerald-400">FC</span></h1>
         <button 
-          onClick={fetchData} 
-          className="p-2 rounded-full hover:bg-gray-200 transition"
-          disabled={loading}
+          onClick={handleForceSync}
+          className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-4 py-2 rounded-xl text-xs font-bold transition border border-emerald-500/20"
         >
-          <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-3 w-3 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+          {syncStatus === 'syncing' ? 'Syncing...' : 'Sync Now'}
         </button>
       </header>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center gap-3 mb-6">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {data.length > 0 ? (
-          data.map((item, idx) => (
-            <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="text-gray-500 text-sm font-medium">{item.label}</h3>
-              <p className="text-4xl font-bold mt-2">{item.value}</p>
-              <div className="mt-4 text-green-600 text-sm flex items-center gap-1 font-semibold">
-                <TrendingUp size={16} /> +{item.trend}%
-              </div>
+      <div className="grid gap-4">
+        {liveMatches.map(match => (
+          <div key={match.id} className="bg-slate-900 border border-white/10 p-5 rounded-2xl flex items-center justify-between">
+            <div>
+              <h2 className="font-bold">{match.homeTeam.name} vs {match.awayTeam.name}</h2>
+              <p className="text-xs text-slate-400">{match.status.toUpperCase()}</p>
             </div>
-          ))
-        ) : (
-          !loading && <div className="col-span-full text-center py-12 text-gray-400">No data available yet.</div>
-        )}
+          </div>
+        ))}
       </div>
-
-      <footer className="mt-12 text-center text-xs text-gray-400">
-        Last updated: {lastUpdated.toLocaleTimeString()}
-      </footer>
     </div>
   );
 }
