@@ -50,4 +50,5 @@ export interface Match {
   timeline: MatchEvent[];
   homeLineup: string[];
   awayLineup: string[];
+  aiAnalysis?: string;
 }
