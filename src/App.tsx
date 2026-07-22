@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Trophy, Activity, RefreshCw, ChevronRight, Clock, Shield, BarChart3, X, Award, MapPin } from 'lucide-react';
+import { Trophy, Activity, RefreshCw, ChevronRight, Clock, Shield, BarChart3, X, Award, MapPin, AlertCircle } from 'lucide-react';
 
 interface MatchEvent {
   time: { elapsed: number; extra?: number };
-  team: { id: number; name: string };
+  team: { id: number; name: string; logo?: string };
   player: { id: number; name: string };
+  assist?: { id: number; name: string };
   type: string;
   detail: string;
+  comments?: string;
 }
 
 interface TeamInfo {
@@ -41,23 +43,6 @@ interface Match {
   referee?: string;
   stats?: MatchStats;
   timeline?: MatchEvent[];
-}
-
-interface ApiFixtureItem {
-  fixture?: {
-    id?: number;
-    date?: string;
-    referee?: string;
-    venue?: { name?: string; city?: string };
-    status?: { short?: string };
-  };
-  league?: { name?: string; round?: string };
-  teams?: {
-    home?: { id?: number; name?: string; logo?: string; winner?: boolean };
-    away?: { id?: number; name?: string; logo?: string; winner?: boolean };
-  };
-  goals?: { home?: number; away?: number };
-  score?: { halftime?: { home?: number; away?: number } };
 }
 
 interface League {
@@ -140,8 +125,10 @@ export default function App() {
   const [season, setSeason] = useState<number>(LEAGUES[0].seasons[0]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [modalTab, setModalTab] = useState<'timeline' | 'stats' | 'meta'>('timeline');
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [apiError, setApiError] = useState<string | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
 
   useEffect(() => {
     if (!selectedLeague.seasons.includes(season)) {
@@ -171,20 +158,22 @@ export default function App() {
          throw new Error(typeof firstError === 'string' ? firstError : 'API Error occurred.');
       }
 
-      const rawFixtures: ApiFixtureItem[] = (Array.isArray(data.response) ? data.response : []).slice(0, 25);
+      const rawFixtures: any[] = (data.response || []).slice(0, 20);
       
-      const mappedMatches: Match[] = rawFixtures.map((item) => {
+      const mappedMatches: Match[] = rawFixtures.map((item: any) => {
         const homeGoals = item?.goals?.home ?? 0;
         const awayGoals = item?.goals?.away ?? 0;
         const homeTeamName = item?.teams?.home?.name ?? 'Home Team';
         const awayTeamName = item?.teams?.away?.name ?? 'Away Team';
-        
+        const homeTeamId = item?.teams?.home?.id ?? 1;
+        const awayTeamId = item?.teams?.away?.id ?? 2;
+
         return {
           id: String(item?.fixture?.id ?? Math.random()),
           competition: item?.league?.name ?? 'League',
           round: item?.league?.round ?? '',
           homeTeam: { 
-            id: item?.teams?.home?.id ?? 1,
+            id: homeTeamId,
             name: homeTeamName, 
             short: homeTeamName.substring(0, 3).toUpperCase(), 
             color: '#1e293b', 
@@ -192,7 +181,7 @@ export default function App() {
             winner: item?.teams?.home?.winner 
           },
           awayTeam: { 
-            id: item?.teams?.away?.id ?? 2,
+            id: awayTeamId,
             name: awayTeamName, 
             short: awayTeamName.substring(0, 3).toUpperCase(), 
             color: '#1e293b', 
@@ -207,20 +196,7 @@ export default function App() {
             name: item?.fixture?.venue?.name ?? 'Stadium Venue',
             city: item?.fixture?.venue?.city ?? 'Host City'
           },
-          referee: item?.fixture?.referee ?? 'FIFA Official',
-          stats: {
-            possession: [52, 48],
-            shots: [homeGoals + 6, awayGoals + 5],
-            shotsOnTarget: [homeGoals + 2, awayGoals + 2],
-            fouls: [11, 13],
-            yellowCards: [Math.floor(Math.random() * 3), Math.floor(Math.random() * 3)],
-            redCards: [0, 0]
-          },
-          timeline: [
-            ...(homeGoals > 0 ? [{ time: { elapsed: 24 }, team: { id: item?.teams?.home?.id ?? 1, name: homeTeamName }, player: { id: 1, name: 'Goal Scorer' }, type: 'Goal', detail: 'Normal Goal' }] : []),
-            ...(awayGoals > 0 ? [{ time: { elapsed: 67 }, team: { id: item?.teams?.away?.id ?? 2, name: awayTeamName }, player: { id: 2, name: 'Away Striker' }, type: 'Goal', detail: 'Normal Goal' }] : []),
-            { time: { elapsed: 38 }, team: { id: item?.teams?.home?.id ?? 1, name: homeTeamName }, player: { id: 3, name: 'Defender' }, type: 'Card', detail: 'Yellow Card' }
-          ]
+          referee: item?.fixture?.referee ?? 'FIFA Official'
         };
       });
 
@@ -238,11 +214,98 @@ export default function App() {
 
   useEffect(() => {
     fetchArchiveData(selectedLeague.id, season);
-  }, [selectedLeague, season, fetchArchiveData]);
+  }, [selectedLeague.id, season, fetchArchiveData]);
+
+  const handleSelectMatch = async (match: Match) => {
+    setSelectedMatch(match);
+    setModalTab('timeline');
+    setLoadingDetails(true);
+
+    try {
+      const apiKey = 'eaf39a49fa71b831c7149d4218aca070';
+      const fixtureId = match.id;
+
+      const eventsRes = await fetch(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`, {
+        headers: { 'x-apisports-key': apiKey, 'x-rapidapi-key': apiKey }
+      });
+      const eventsData = await eventsRes.json();
+      const rawEvents: any[] = eventsData?.response || [];
+
+      const fetchedTimeline: MatchEvent[] = rawEvents.map((ev: any) => ({
+        time: { elapsed: ev?.time?.elapsed ?? 0, extra: ev?.time?.extra },
+        team: { id: ev?.team?.id ?? 0, name: ev?.team?.name ?? 'Team', logo: ev?.team?.logo },
+        player: { id: ev?.player?.id ?? 0, name: ev?.player?.name ?? 'Player' },
+        assist: ev?.assist?.name ? { id: ev?.assist?.id ?? 0, name: ev?.assist?.name } : undefined,
+        type: ev?.type ?? 'Event',
+        detail: ev?.detail ?? '',
+        comments: ev?.comments
+      }));
+
+      const statsRes = await fetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`, {
+        headers: { 'x-apisports-key': apiKey, 'x-rapidapi-key': apiKey }
+      });
+      const statsData = await statsRes.json();
+      const rawStats: any[] = statsData?.response || [];
+
+      let possession: [number, number] = [50, 50];
+      let shots: [number, number] = [10, 10];
+      let shotsOnTarget: [number, number] = [4, 4];
+      let fouls: [number, number] = [10, 10];
+      let yellowCards: [number, number] = [1, 1];
+      let redCards: [number, number] = [0, 0];
+
+      if (rawStats.length >= 2) {
+        const parseStat = (statList: any[], typeName: string, fallback: number) => {
+          const found = statList.find((s: any) => s?.type?.toLowerCase() === typeName.toLowerCase());
+          if (!found || found.value === null) return fallback;
+          const val = String(found.value).replace('%', '').trim();
+          return Number(val) || fallback;
+        };
+
+        const homeStatList = rawStats[0]?.statistics || [];
+        const awayStatList = rawStats[1]?.statistics || [];
+
+        possession = [
+          parseStat(homeStatList, 'Ball Possession', 52),
+          parseStat(awayStatList, 'Ball Possession', 48)
+        ];
+        shots = [
+          parseStat(homeStatList, 'Total Shots', 12),
+          parseStat(awayStatList, 'Total Shots', 10)
+        ];
+        shotsOnTarget = [
+          parseStat(homeStatList, 'Shots on Goal', 5),
+          parseStat(awayStatList, 'Shots on Goal', 4)
+        ];
+        fouls = [
+          parseStat(homeStatList, 'Fouls', 11),
+          parseStat(awayStatList, 'Fouls', 12)
+        ];
+        yellowCards = [
+          parseStat(homeStatList, 'Yellow Cards', 2),
+          parseStat(awayStatList, 'Yellow Cards', 2)
+        ];
+        redCards = [
+          parseStat(homeStatList, 'Red Cards', 0),
+          parseStat(awayStatList, 'Red Cards', 0)
+        ];
+      }
+
+      setSelectedMatch((prev: Match | null) => prev ? {
+        ...prev,
+        timeline: fetchedTimeline,
+        stats: { possession, shots, shotsOnTarget, fouls, yellowCards, redCards }
+      } : null);
+
+    } catch (err: unknown) {
+      console.error("Failed to fetch match details:", err);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 font-sans p-4 md:p-8">
-      {/* Header */}
       <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8 pb-6 border-b border-white/10">
         <div>
           <h1 className="text-2xl font-black flex items-center gap-2">
@@ -251,35 +314,33 @@ export default function App() {
           <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">Official European Leagues & World Cup Archive</p>
         </div>
 
-        {/* League Selector */}
         <div className="flex flex-wrap items-center gap-2 bg-slate-900 p-1.5 rounded-2xl border border-white/10">
           <span className="text-xs text-slate-400 font-bold uppercase ml-2 mr-1">League:</span>
-          {LEAGUES.map((l) => (
+          {LEAGUES.map((l: League) => (
             <button
               key={l.id}
               onClick={() => setSelectedLeague(l)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${selectedLeague.id === l.id ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${selectedLeague.id === l.id ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
             >
               {l.name}
             </button>
           ))}
         </div>
 
-        {/* Season Selector & Sync */}
         <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-2xl border border-white/10">
           <span className="text-xs text-slate-400 font-bold uppercase ml-2 mr-1">Season:</span>
-          {selectedLeague.seasons.map((s) => (
+          {selectedLeague.seasons.map((s: number) => (
             <button
               key={s}
               onClick={() => setSeason(s)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${season === s ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${season === s ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:bg-slate-800'}`}
             >
               {s}
             </button>
           ))}
           <button 
             onClick={() => fetchArchiveData(selectedLeague.id, season)}
-            className="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-xl text-xs font-bold transition ml-2 border border-white/5"
+            className="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-xl text-xs font-bold transition ml-2 border border-white/5 cursor-pointer"
           >
             <RefreshCw className={`h-3 w-3 ${syncStatus === 'syncing' ? 'animate-spin text-emerald-400' : ''}`} />
             Sync
@@ -287,7 +348,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
@@ -299,10 +359,9 @@ export default function App() {
           </div>
         </div>
         
-        {/* Error Display */}
         {apiError && (
           <div className="bg-red-950/30 border border-red-500/30 rounded-2xl p-8 flex flex-col items-center text-center mt-4">
-             <div className="w-12 h-12 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mb-4"><X className="h-6 w-6" /></div>
+             <div className="w-12 h-12 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mb-4"><AlertCircle className="h-6 w-6" /></div>
              <h3 className="text-lg font-bold text-white mb-2">API Archive Notice</h3>
              <p className="text-sm text-red-300 max-w-md">{apiError}</p>
           </div>
@@ -315,17 +374,16 @@ export default function App() {
         )}
         
         <div className="grid gap-4">
-          {matches.map(match => (
+          {matches.map((match: Match) => (
             <MatchCard 
               key={match.id} 
               match={match} 
-              onClick={() => setSelectedMatch(match)}
+              onClick={() => handleSelectMatch(match)}
             />
           ))}
         </div>
       </div>
 
-      {/* Match Details Modal */}
       {selectedMatch && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-white/15 rounded-3xl w-full max-w-2xl p-6 md:p-8 shadow-2xl relative my-8">
@@ -350,99 +408,139 @@ export default function App() {
                 <span className="text-sm font-bold block text-slate-200">{selectedMatch.homeTeam.name}</span>
               </div>
               <div className="text-3xl font-black text-emerald-400 px-4">
-                {selectedMatch.status === 'upcoming' ? 'VS' : selectedMatch.score ?? '0 - 0'}
+                {selectedMatch.status === 'upcoming' ? 'VS' : (selectedMatch.score ?? '0 - 0')}
               </div>
               <div className="text-center w-1/3">
                 <span className="text-sm font-bold block text-slate-200">{selectedMatch.awayTeam.name}</span>
               </div>
             </div>
 
-            <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
-              {/* Official Archive Data */}
-              <div className="bg-slate-950 p-5 rounded-2xl border border-white/5 space-y-4">
-                <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-2"><Shield className="h-4 w-4" /> Official Match Metadata</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/5 text-xs">
-                  <div>
-                    <span className="text-slate-500 block mb-1 font-semibold">STADIUM & VENUE</span>
-                    <span className="font-semibold text-slate-200 flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> {selectedMatch.venue?.name ?? 'N/A'} ({selectedMatch.venue?.city ?? 'City'})
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block mb-1 font-semibold">REFEREE</span>
-                    <span className="font-semibold text-slate-200 flex items-center gap-1">
-                      <Award className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> {selectedMatch.referee ?? 'Official'}
-                    </span>
-                  </div>
-                </div>
-                <div className="pt-3 border-t border-white/5 flex justify-between text-xs font-semibold text-slate-400">
-                  <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-emerald-400" /> Kickoff:</span>
-                  <span className="text-slate-200">{new Date(selectedMatch.date).toLocaleString()}</span>
-                </div>
-              </div>
+            <div className="flex gap-2 mb-6 bg-slate-950 p-1.5 rounded-xl border border-white/5">
+              <button 
+                onClick={() => setModalTab('timeline')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${modalTab === 'timeline' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:bg-slate-900'}`}
+              >
+                Minute-by-Minute Timeline
+              </button>
+              <button 
+                onClick={() => setModalTab('stats')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${modalTab === 'stats' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:bg-slate-900'}`}
+              >
+                Match Statistics
+              </button>
+              <button 
+                onClick={() => setModalTab('meta')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${modalTab === 'meta' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:bg-slate-900'}`}
+              >
+                Venue & Referee
+              </button>
+            </div>
 
-              {/* Match Statistics */}
-              {selectedMatch.stats && (
-                <div className="bg-slate-950 p-5 rounded-2xl border border-white/5 space-y-4">
-                  <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Comprehensive Match Statistics</h3>
-                  <div className="space-y-3 pt-2 border-t border-white/5 text-xs">
-                    <div>
-                      <div className="flex justify-between font-bold mb-1 text-slate-300">
-                        <span>{selectedMatch.stats.possession[0]}%</span>
-                        <span className="text-slate-500 uppercase">Possession</span>
-                        <span>{selectedMatch.stats.possession[1]}%</span>
+            <div className="space-y-6 max-h-[50vh] overflow-y-auto pr-2">
+              {loadingDetails ? (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-3">
+                  <RefreshCw className="h-6 w-6 animate-spin text-emerald-400" />
+                  <p className="text-xs font-semibold uppercase tracking-wider">Fetching live minute-by-minute events from API...</p>
+                </div>
+              ) : (
+                <>
+                  {modalTab === 'timeline' && (
+                    <div className="space-y-3">
+                      {selectedMatch.timeline && selectedMatch.timeline.length > 0 ? (
+                        selectedMatch.timeline.map((event: MatchEvent, idx: number) => (
+                          <div key={idx} className="flex items-center gap-4 bg-slate-950 p-3.5 rounded-xl border border-white/5 text-xs shadow-sm">
+                            <div className="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center font-bold text-emerald-400 border border-white/10 shrink-0">
+                              {event.time.elapsed}'{event.time.extra ? `+${event.time.extra}` : ''}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-bold text-slate-200">
+                                {event.player?.name ?? 'Player'} 
+                                {event.assist?.name ? <span className="text-slate-400 font-normal"> (Assist: {event.assist.name})</span> : null}
+                              </p>
+                              <p className="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold mt-0.5 flex items-center gap-1.5">
+                                {event.type === 'Goal' && '⚽ GOAL — '}
+                                {event.type === 'Card' && (event.detail.includes('Red') ? '🟥 RED CARD — ' : '🟨 YELLOW CARD — ')}
+                                {event.type === 'subst' && '🔄 SUBSTITUTION — '}
+                                {event.type === 'Var' && '📺 VAR — '}
+                                {event.detail}
+                              </p>
+                              {event.comments && <p className="text-[10px] text-slate-500 italic mt-1">{event.comments}</p>}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-10 text-slate-500 bg-slate-950 rounded-2xl border border-white/5">
+                          No minute-by-minute event logs recorded for this fixture.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {modalTab === 'stats' && selectedMatch.stats && (
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-white/5 space-y-4">
+                      <div className="space-y-3 text-xs">
+                        <div>
+                          <div className="flex justify-between font-bold mb-1 text-slate-300">
+                            <span>{selectedMatch.stats.possession[0]}%</span>
+                            <span className="text-slate-500 uppercase">Possession</span>
+                            <span>{selectedMatch.stats.possession[1]}%</span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
+                            <div className="bg-emerald-500 h-full" style={{ width: `${selectedMatch.stats.possession[0]}%` }}></div>
+                            <div className="bg-blue-600 h-full" style={{ width: `${selectedMatch.stats.possession[1]}%` }}></div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center py-2 border-b border-white/5">
+                          <span className="font-bold text-slate-200">{selectedMatch.stats.shots[0]}</span>
+                          <span className="text-slate-500 uppercase text-[11px]">Total Shots</span>
+                          <span className="font-bold text-slate-200">{selectedMatch.stats.shots[1]}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center py-2 border-b border-white/5">
+                          <span className="font-bold text-slate-200">{selectedMatch.stats.shotsOnTarget[0]}</span>
+                          <span className="text-slate-500 uppercase text-[11px]">Shots On Target</span>
+                          <span className="font-bold text-slate-200">{selectedMatch.stats.shotsOnTarget[1]}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center py-2 border-b border-white/5">
+                          <span className="font-bold text-slate-200">{selectedMatch.stats.yellowCards[0]}</span>
+                          <span className="text-slate-500 uppercase text-[11px]">Yellow Cards (🟨)</span>
+                          <span className="font-bold text-slate-200">{selectedMatch.stats.yellowCards[1]}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center py-2">
+                          <span className="font-bold text-slate-200">{selectedMatch.stats.redCards[0]}</span>
+                          <span className="text-slate-500 uppercase text-[11px]">Red Cards (🟥)</span>
+                          <span className="font-bold text-slate-200">{selectedMatch.stats.redCards[1]}</span>
+                        </div>
                       </div>
-                      <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
-                        <div className="bg-emerald-500 h-full" style={{ width: `${selectedMatch.stats.possession[0]}%` }}></div>
-                        <div className="bg-blue-600 h-full" style={{ width: `${selectedMatch.stats.possession[1]}%` }}></div>
-                      </div>
                     </div>
+                  )}
 
-                    <div className="flex justify-between items-center py-2 border-b border-white/5">
-                      <span className="font-bold text-slate-200">{selectedMatch.stats.shots[0]}</span>
-                      <span className="text-slate-500 uppercase text-[11px]">Total Shots</span>
-                      <span className="font-bold text-slate-200">{selectedMatch.stats.shots[1]}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center py-2 border-b border-white/5">
-                      <span className="font-bold text-slate-200">{selectedMatch.stats.shotsOnTarget[0]}</span>
-                      <span className="text-slate-500 uppercase text-[11px]">Shots On Target</span>
-                      <span className="font-bold text-slate-200">{selectedMatch.stats.shotsOnTarget[1]}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center py-2 border-b border-white/5">
-                      <span className="font-bold text-slate-200">{selectedMatch.stats.yellowCards[0]}</span>
-                      <span className="text-slate-500 uppercase text-[11px]">Yellow Cards (🟨)</span>
-                      <span className="font-bold text-slate-200">{selectedMatch.stats.yellowCards[1]}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center py-2">
-                      <span className="font-bold text-slate-200">{selectedMatch.stats.redCards[0]}</span>
-                      <span className="text-slate-500 uppercase text-[11px]">Red Cards (🟥)</span>
-                      <span className="font-bold text-slate-200">{selectedMatch.stats.redCards[1]}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Match Timeline */}
-              {selectedMatch.timeline && selectedMatch.timeline.length > 0 && (
-                <div className="bg-slate-950 p-5 rounded-2xl border border-white/5 space-y-4">
-                  <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-2"><Activity className="h-4 w-4" /> Match Timeline & Key Events</h3>
-                  <div className="space-y-3 pt-2 border-t border-white/5">
-                    {selectedMatch.timeline.map((event, idx) => (
-                      <div key={idx} className="flex items-center gap-4 bg-slate-900/50 p-3 rounded-xl border border-white/5 text-xs">
-                        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-emerald-400 border border-white/5 shrink-0">
-                          {event.time.elapsed}'
+                  {modalTab === 'meta' && (
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-white/5 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <span className="text-slate-500 block mb-1 font-semibold">STADIUM & VENUE</span>
+                          <span className="font-semibold text-slate-200 flex items-center gap-1">
+                            <MapPin className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> {selectedMatch.venue?.name ?? 'N/A'} ({selectedMatch.venue?.city ?? 'City'})
+                          </span>
                         </div>
                         <div>
-                          <p className="font-bold text-slate-200">{event.player?.name ?? 'Player'} <span className="text-slate-400 font-normal">({event.team?.name ?? 'Team'})</span></p>
-                          <p className="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold mt-0.5">{event.type} — {event.detail}</p>
+                          <span className="text-slate-500 block mb-1 font-semibold">REFEREE</span>
+                          <span className="font-semibold text-slate-200 flex items-center gap-1">
+                            <Award className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> {selectedMatch.referee ?? 'Official'}
+                          </span>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="pt-3 border-t border-white/5 flex justify-between text-xs font-semibold text-slate-400">
+                        <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-emerald-400" /> Kickoff:</span>
+                        <span className="text-slate-200">{new Date(selectedMatch.date).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
