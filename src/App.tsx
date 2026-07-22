@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Trophy, Activity, RefreshCw, ChevronRight, Clock, Shield, BarChart3, X, Award, MapPin, AlertCircle } from 'lucide-react';
+import { Trophy, Activity, RefreshCw, ChevronRight, Clock, Shield, BarChart3, X, Award, MapPin, AlertCircle, Calendar } from 'lucide-react';
 
 interface MatchEvent {
   time: { elapsed: number; extra?: number };
@@ -158,9 +158,9 @@ export default function App() {
          throw new Error(typeof firstError === 'string' ? firstError : 'API Error occurred.');
       }
 
-      const rawFixtures: any[] = (data.response || []).slice(0, 20);
+      const rawFixtures: Record<string, any>[] = data.response || [];
       
-      const mappedMatches: Match[] = rawFixtures.map((item: any) => {
+      const mappedMatches: Match[] = rawFixtures.map((item: Record<string, any>) => {
         const homeGoals = item?.goals?.home ?? 0;
         const awayGoals = item?.goals?.away ?? 0;
         const homeTeamName = item?.teams?.home?.name ?? 'Home Team';
@@ -229,9 +229,9 @@ export default function App() {
         headers: { 'x-apisports-key': apiKey, 'x-rapidapi-key': apiKey }
       });
       const eventsData = await eventsRes.json();
-      const rawEvents: any[] = eventsData?.response || [];
+      const rawEvents: Record<string, any>[] = eventsData?.response || [];
 
-      const fetchedTimeline: MatchEvent[] = rawEvents.map((ev: any) => ({
+      const fetchedTimeline: MatchEvent[] = rawEvents.map((ev: Record<string, any>) => ({
         time: { elapsed: ev?.time?.elapsed ?? 0, extra: ev?.time?.extra },
         team: { id: ev?.team?.id ?? 0, name: ev?.team?.name ?? 'Team', logo: ev?.team?.logo },
         player: { id: ev?.player?.id ?? 0, name: ev?.player?.name ?? 'Player' },
@@ -245,7 +245,7 @@ export default function App() {
         headers: { 'x-apisports-key': apiKey, 'x-rapidapi-key': apiKey }
       });
       const statsData = await statsRes.json();
-      const rawStats: any[] = statsData?.response || [];
+      const rawStats: Record<string, any>[] = statsData?.response || [];
 
       let possession: [number, number] = [50, 50];
       let shots: [number, number] = [10, 10];
@@ -255,8 +255,8 @@ export default function App() {
       let redCards: [number, number] = [0, 0];
 
       if (rawStats.length >= 2) {
-        const parseStat = (statList: any[], typeName: string, fallback: number) => {
-          const found = statList.find((s: any) => s?.type?.toLowerCase() === typeName.toLowerCase());
+        const parseStat = (statList: Record<string, any>[], typeName: string, fallback: number): number => {
+          const found = statList.find((s: Record<string, any>) => s?.type?.toLowerCase() === typeName.toLowerCase());
           if (!found || found.value === null) return fallback;
           const val = String(found.value).replace('%', '').trim();
           return Number(val) || fallback;
@@ -328,7 +328,8 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-2xl border border-white/10">
-          <span className="text-xs text-slate-400 font-bold uppercase ml-2 mr-1">Season:</span>
+          <Calendar className="h-4 w-4 text-emerald-400 ml-2 hidden sm:block" />
+          <span className="text-xs text-slate-400 font-bold uppercase mr-1 pl-1">Season:</span>
           {selectedLeague.seasons.map((s: number) => (
             <button
               key={s}
@@ -354,7 +355,7 @@ export default function App() {
             <Activity className="h-5 w-5 text-emerald-400" />
             <div>
               <h2 className="text-lg font-bold">{selectedLeague.name} Archive ({season})</h2>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Fetched Directly From API-Football v3</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Fetched Directly From API-Football v3 (All Fixtures Loaded)</p>
             </div>
           </div>
         </div>
